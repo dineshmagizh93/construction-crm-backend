@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id                    String                 @id @default(uuid())
+  name                  String                 @db.VarChar(255)
+  email                 String                 @unique @db.VarChar(255)
+  phone                 String?                @db.VarChar(50)
+  address               String?                @db.Text
+  city                  String?                @db.VarChar(100)
+  state                 String?                @db.VarChar(100)
+  zipCode               String?                @db.VarChar(20)
+  country               String?                @db.VarChar(100)
+  taxId                 String?                @db.VarChar(50)
+  website               String?                @db.VarChar(255)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+  currency              String                 @default("USD") @db.VarChar(10)
+  documents             Document[]
+  expenses              Expense[]
+  inventoryItems        InventoryItem[]
+  inventoryTransactions InventoryTransaction[]
+  labours               Labour[]
+  leads                 Lead[]
+  payments              Payment[]
+  projects              Project[]
+  siteProgresses        SiteProgress[]
+  users                 User[]
+  vendors               Vendor[]
+  tasks                 Task[]
+
+  @@index([email])
+  @@map("companies")
+}
+
+model User {
+  id                 String          @id @default(uuid())
+  companyId          String
+  email              String          @db.VarChar(255)
+  password           String          @db.VarChar(255)
+  firstName          String          @db.VarChar(100)
+  lastName           String          @db.VarChar(100)
+  role               String          @default("user") @db.VarChar(50)
+  isActive           Boolean         @default(true)
+  isApproved         Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
+  mustChangePassword Boolean         @default(false)
+  passwordResets     PasswordReset[]
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedTasks      Task[]          @relation("TaskAssignee")
+  taskComments       TaskComment[]
+  taskActivities     TaskActivity[]
+
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([email])
+  @@map("users")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_resets")
+}
+
+model Project {
+  id              String         @id @default(uuid())
+  companyId       String
+  name            String         @db.VarChar(255)
+  clientName      String?        @db.VarChar(255)
+  location        String?        @db.VarChar(255)
+  description     String?        @db.Text
+  startDate       DateTime?
+  endDate         DateTime?
+  status          String         @default("Planning") @db.VarChar(50)
+  estimatedBudget Decimal?       @db.Decimal(15, 2)
+  actualBudget    Decimal?       @db.Decimal(15, 2)
+  progress        Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+  documents       Document[]
+  expenses        Expense[]
+  labours         Labour[]
+  payments        Payment[]
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteProgresses  SiteProgress[]
+  tasks           Task[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Lead {
+  id         String    @id @default(uuid())
+  companyId  String
+  name       String    @db.VarChar(255)
+  phone      String    @db.VarChar(50)
+  email      String?   @db.VarChar(255)
+  type       String    @default("LEAD") @db.VarChar(20)
+  source     String    @db.VarChar(50)
+  status     String    @default("New") @db.VarChar(50)
+  assignedTo String?   @db.VarChar(255)
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([type])
+  @@index([status])
+  @@map("leads")
+}
+
+model Payment {
+  id        String    @id @default(uuid())
+  companyId String
+  projectId String
+  milestone String    @db.VarChar(255)
+  amount    Decimal   @db.Decimal(15, 2)
+  dueDate   DateTime
+  status    String    @default("Pending") @db.VarChar(50)
+  paidDate  DateTime?
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Expense {
+  id         String    @id @default(uuid())
+  companyId  String
+  projectId  String
+  category   String    @db.VarChar(50)
+  amount     Decimal   @db.Decimal(15, 2)
+  date       DateTime
+  paidTo     String    @db.VarChar(255)
+  notes      String?   @db.Text
+  attachment String?   @db.VarChar(500)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([category])
+  @@map("expenses")
+}
+
+model SiteProgress {
+  id        String    @id @default(uuid())
+  companyId String
+  projectId String
+  date      DateTime
+  notes     String?   @db.Text
+  photos    String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([date])
+  @@map("site_progress")
+}
+
+model Vendor {
+  id            String    @id @default(uuid())
+  companyId     String
+  name          String    @db.VarChar(255)
+  type          String    @db.VarChar(100)
+  contactPerson String?   @db.VarChar(255)
+  phone         String    @db.VarChar(50)
+  email         String?   @db.VarChar(255)
+  address       String?   @db.Text
+  notes         String?   @db.Text
+  status        String    @default("Active") @db.VarChar(50)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([type])
+  @@map("vendors")
+}
+
+model Labour {
+  id         String    @id @default(uuid())
+  companyId  String
+  projectId  String
+  category   String    @db.VarChar(50)
+  headcount  Int
+  costPerDay Decimal   @db.Decimal(15, 2)
+  date       DateTime
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([category])
+  @@map("labour")
+}
+
+model Document {
+  id         String    @id @default(uuid())
+  companyId  String
+  projectId  String
+  name       String    @db.VarChar(255)
+  type       String    @db.VarChar(50)
+  fileUrl    String    @db.VarChar(500)
+  fileName   String    @db.VarChar(255)
+  fileSize   Int?
+  notes      String?   @db.Text
+  uploadedBy String    @db.VarChar(255)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([type])
+  @@map("documents")
+}
+
+model InventoryItem {
+  id           String                 @id @default(uuid())
+  companyId    String
+  name         String                 @db.VarChar(255)
+  description  String?                @db.Text
+  category     String                 @db.VarChar(100)
+  unit         String                 @db.VarChar(50)
+  currentStock Decimal                @default(0.00) @db.Decimal(15, 2)
+  minStock     Decimal                @default(0.00) @db.Decimal(15, 2)
+  unitPrice    Decimal?               @db.Decimal(15, 2)
+  vendorId     String?                @db.VarChar(255)
+  location     String?                @db.VarChar(255)
+  sku          String?                @db.VarChar(100)
+  notes        String?                @db.Text
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  deletedAt    DateTime?
+  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions InventoryTransaction[]
+
+  @@index([companyId])
+  @@index([category])
+  @@index([sku])
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id              String        @id @default(uuid())
+  companyId       String
+  itemId          String
+  type            String        @db.VarChar(20)
+  quantity        Decimal       @db.Decimal(15, 2)
+  projectId       String?       @db.VarChar(255)
+  reference       String?       @db.VarChar(255)
+  notes           String?       @db.Text
+  transactionDate DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([itemId])
+  @@index([type])
+  @@index([transactionDate])
+  @@map("inventory_transactions")
+}
+
+model Task {
+  id             String         @id @default(uuid())
+  companyId      String
+  projectId      String?
+  title          String         @db.VarChar(255)
+  description    String?        @db.Text
+  status         String         @default("To Do") @db.VarChar(50)
+  priority       String         @default("Medium") @db.VarChar(20)
+  dueDate        DateTime?
+  assignedTo     String?
+  position       Int            @default(0)
+  labels         String?        @db.Text
+  estimatedHours Decimal?       @db.Decimal(10, 2)
+  actualHours    Decimal?       @db.Decimal(10, 2)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project        Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  assignee       User?          @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  comments       TaskComment[]
+  activities     TaskActivity[]
+
+  @@index([companyId])
+  @@index([projectId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id        String    @id @default(uuid())
+  taskId    String
+  userId    String
+  content   String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_comments")
+}
+
+model TaskActivity {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String
+  action    String   @db.VarChar(100)
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("task_activities")
+}
