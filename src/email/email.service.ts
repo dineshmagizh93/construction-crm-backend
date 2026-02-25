@@ -145,7 +145,7 @@ export class EmailService {
             </div>
             <p><strong>Important:</strong> You will be required to change your password on first login.</p>
             <p>Click the button below to access your account:</p>
-            <a href="${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}/login" class="button">Login Now</a>
+            <a href="${this.configService.get<string>('FRONTEND_URL') || ''}/login" class="button">Login Now</a>
             <div class="footer">
               <p>This is an automated message, please do not reply.</p>
             </div>
@@ -216,7 +216,7 @@ export class EmailService {
   }) {
     const smtpFrom = this.configService.get<string>('SMTP_FROM') || 'noreply@constructioncrm.com';
     const fromEmail = smtpFrom.replace(/^["']|["']$/g, '');
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || '';
     const approvalUrl = `${frontendUrl}/admin/approve?userId=${data.userId}&companyId=${data.companyId}`;
     
     console.log(`📧 Sending approval request email to: ${data.adminEmail}`);

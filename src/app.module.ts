@@ -23,7 +23,9 @@ import { TasksModule } from './tasks/tasks.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: process.env.NODE_ENV === 'production' ? undefined : '.env',
+      // In production, only use environment variables (no .env file)
+      // In development, allow .env file for local development
     }),
     LoggerModule,
     EmailModule,

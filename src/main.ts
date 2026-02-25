@@ -6,6 +6,7 @@ import { join } from 'path';
 import helmet from 'helmet';
 import * as rateLimit from 'express-rate-limit';
 import { LoggerService } from './logger/logger.service';
+import { ConfigService } from '@nestjs/config';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -14,9 +15,15 @@ const execAsync = promisify(exec);
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const logger = app.get(LoggerService);
+  const configService = app.get(ConfigService);
   app.useLogger(logger);
   
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  // Trust proxy for Render/Railway (behind reverse proxy)
+  // Get the underlying Express instance and set trust proxy
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
+  
+  const isDevelopment = configService.get<string>('NODE_ENV') !== 'production';
 
   const killProcessOnPort = async (port: number): Promise<boolean> => {
     try {
@@ -92,8 +99,21 @@ async function bootstrap() {
   };
 
   // Enable CORS FIRST - before other middleware
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  console.log(`🔧 CORS configured for: ${frontendUrl} ${isDevelopment ? '(dev: allowing localhost ports)' : ''}`);
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  
+  if (!frontendUrl && !isDevelopment) {
+    throw new Error(
+      'FRONTEND_URL environment variable is required in production. Please set it in your environment variables.',
+    );
+  }
+
+  const allowedOrigin = isDevelopment
+    ? undefined // Allow all in development
+    : frontendUrl;
+
+  console.log(
+    `🔧 CORS configured for: ${allowedOrigin || 'development (allowing localhost)'} ${isDevelopment ? '(dev mode)' : '(production)'}`,
+  );
 
   app.enableCors({
     origin: isDevelopment
@@ -204,17 +224,36 @@ async function bootstrap() {
     next();
   });
 
-  // Default ports:
-  // - Next.js frontend dev server typically runs on 3000
-  // - NestJS API runs on 3001 (matches frontend default API_BASE_URL)
-  const port = process.env.PORT || 3001;
-  await listenWithRetry(Number(port));
-  console.log(`\n✅ Application is running on: http://localhost:${port}`);
-  console.log(`✅ API Base URL: http://localhost:${port}/api`);
-  console.log(`✅ Uploads served from: http://localhost:${port}/uploads`);
-  console.log(`✅ Security: Helmet & Rate Limiting enabled`);
+  // Use PORT from environment (Render provides this automatically)
+  // Fallback to 5000 for production, 3001 for development
+  const port = configService.get<string>('PORT') || (isDevelopment ? '3001' : '5000');
+  const portNumber = Number(port);
+
+  if (isNaN(portNumber)) {
+    throw new Error(`Invalid PORT value: ${port}. Must be a number.`);
+  }
+
+  // Only use retry logic in development (for Windows port conflicts)
+  if (isDevelopment) {
+    await listenWithRetry(portNumber);
+  } else {
+    await app.listen(portNumber);
+  }
+
+  const baseUrl = isDevelopment
+    ? `http://localhost:${portNumber}`
+    : `https://${configService.get<string>('RENDER_SERVICE_NAME') || 'your-app'}.onrender.com`;
+
+  console.log(`\n✅ Application is running on port: ${portNumber}`);
+  console.log(`✅ API Base URL: ${baseUrl}/api`);
+  console.log(`✅ Environment: ${isDevelopment ? 'development' : 'production'}`);
+  console.log(`✅ Security: Helmet & Rate Limiting ${isDevelopment ? 'disabled' : 'enabled'}`);
   console.log(`✅ All routes registered successfully!`);
-  console.log(`✅ Request logging enabled - all incoming requests will be logged\n`);
+  
+  if (isDevelopment) {
+    console.log(`✅ Request logging enabled - all incoming requests will be logged`);
+  }
+  console.log('');
 }
 
 bootstrap();

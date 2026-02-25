@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -17,6 +18,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -301,7 +303,10 @@ export class AuthService {
     }
 
     // Send reset email
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    if (!frontendUrl) {
+      throw new Error('FRONTEND_URL environment variable is required for password reset emails');
+    }
     const resetUrl = `${frontendUrl}/reset-password?token=${token}`;
 
     console.log('📧 Preparing to send reset email...');
@@ -399,10 +404,12 @@ export class AuthService {
     // Send notification email to user
     if (approved) {
       try {
+        const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+        const loginUrl = frontendUrl ? `${frontendUrl}/login` : '/login';
         await this.emailService.sendNotificationEmail(
           user.email,
           'Account Approved - Construction CRM',
-          `Dear ${user.firstName} ${user.lastName},\n\nYour account has been approved. You can now login to Construction CRM.\n\nLogin at: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/login`
+          `Dear ${user.firstName} ${user.lastName},\n\nYour account has been approved. You can now login to Construction CRM.\n\nLogin at: ${loginUrl}`
         );
       } catch (error) {
         console.error('Failed to send approval notification email:', error);
