@@ -99,7 +99,7 @@ async function bootstrap() {
   };
 
   // Enable CORS FIRST - before other middleware
-  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  let frontendUrl = configService.get<string>('FRONTEND_URL');
   
   if (!frontendUrl && !isDevelopment) {
     throw new Error(
@@ -107,12 +107,13 @@ async function bootstrap() {
     );
   }
 
-  const allowedOrigin = isDevelopment
-    ? undefined // Allow all in development
-    : frontendUrl;
+  // Normalize FRONTEND_URL: remove trailing slashes and whitespace
+  if (frontendUrl) {
+    frontendUrl = frontendUrl.trim().replace(/\/+$/, '');
+  }
 
   console.log(
-    `🔧 CORS configured for: ${allowedOrigin || 'development (allowing localhost)'} ${isDevelopment ? '(dev mode)' : '(production)'}`,
+    `🔧 CORS configured for: ${frontendUrl || 'development (allowing localhost)'} ${isDevelopment ? '(dev mode)' : '(production)'}`,
   );
 
   app.enableCors({
@@ -128,7 +129,31 @@ async function bootstrap() {
 
           return callback(new Error(`CORS blocked for origin: ${origin}`), false);
         }
-      : frontendUrl,
+      : (origin, callback) => {
+          // Allow same-origin / server-to-server requests (no Origin header)
+          if (!origin) return callback(null, true);
+
+          // Normalize origin: remove trailing slashes
+          const normalizedOrigin = origin.trim().replace(/\/+$/, '');
+          const normalizedFrontendUrl = frontendUrl!.trim().replace(/\/+$/, '');
+
+          // Exact match (handles trailing slash differences)
+          if (normalizedOrigin === normalizedFrontendUrl) {
+            return callback(null, true);
+          }
+
+          // Log for debugging
+          console.warn(
+            `⚠️  CORS: Origin mismatch. Expected: ${normalizedFrontendUrl}, Got: ${normalizedOrigin}`,
+          );
+
+          return callback(
+            new Error(
+              `CORS blocked: Origin ${normalizedOrigin} does not match ${normalizedFrontendUrl}`,
+            ),
+            false,
+          );
+        },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
