@@ -34,8 +34,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       },
     });
 
-    if (!user || user.deletedAt || !user.isActive || !user.isApproved || !user.company || user.company.deletedAt) {
-      throw new UnauthorizedException('User not found, inactive, or not approved');
+    // Note: Approval check removed - users are auto-approved on registration
+    // If you need to re-enable approval, add !user.isApproved to the condition below
+    if (!user || user.deletedAt || !user.isActive || !user.company || user.company.deletedAt) {
+      throw new UnauthorizedException('User not found or inactive');
     }
 
     return {

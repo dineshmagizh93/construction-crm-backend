@@ -46,7 +46,7 @@ export class AuthService {
         },
       });
 
-      // Create admin user with isApproved: false (pending approval)
+      // Create admin user with isApproved: true (auto-approved)
       const user = await tx.user.create({
         data: {
           companyId: company.id,
@@ -55,33 +55,22 @@ export class AuthService {
           firstName,
           lastName,
           role: 'admin',
-          isApproved: false, // Require admin approval
+          isApproved: true, // Auto-approve - no approval required
+          isActive: true, // Activate immediately
         },
       });
 
       return { company, user };
     });
 
-    // Send approval request email to admin
-    try {
-      await this.emailService.sendApprovalRequestEmail({
-        adminEmail: 'dineshemur@gmail.com',
-        companyName: result.company.name,
-        companyEmail: result.company.email,
-        userName: `${result.user.firstName} ${result.user.lastName}`,
-        userEmail: result.user.email,
-        userId: result.user.id,
-        companyId: result.company.id,
-      });
-    } catch (error) {
-      console.error('Failed to send approval request email:', error);
-      // Don't fail registration if email fails
-    }
+    // Generate JWT token for immediate login
+    const token = this.generateToken(result.user);
 
-    // Return success message but NO token (user must wait for approval)
+    // Return success with token (user can login immediately)
     return {
-      message: 'Registration successful. Your account is pending approval. You will receive an email once your account is approved.',
-      requiresApproval: true,
+      message: 'Registration successful. You can now login.',
+      access_token: token,
+      requiresApproval: false,
       user: {
         id: result.user.id,
         email: result.user.email,
@@ -122,10 +111,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if user is approved (MUST BE BEFORE TOKEN GENERATION)
-    if (!user.isApproved) {
-      throw new UnauthorizedException('Your account is pending approval. Please wait for admin approval before logging in.');
-    }
+    // Note: Approval check removed - users are auto-approved on registration
+    // If you need to re-enable approval, uncomment the check below:
+    // if (!user.isApproved) {
+    //   throw new UnauthorizedException('Your account is pending approval. Please wait for admin approval before logging in.');
+    // }
 
     // Check if user is active
     if (!user.isActive) {
