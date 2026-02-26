@@ -15,16 +15,32 @@ This guide explains how to deploy the Construction CRM backend to Render with Ra
 3. Wait for the database to be provisioned
 4. Click on the MySQL service
 5. Go to the "Variables" tab
-6. Copy the `DATABASE_URL` value (it will look like: `mysql://root:password@host:port/database`)
 
-**Important**: Railway MySQL requires SSL. The connection string should include SSL parameters:
-```
-mysql://user:password@host:port/database?ssl={"rejectUnauthorized":false}
-```
+**⚠️ Important**: Railway uses template variables like `${{MYSQLUSER}}` which **do NOT work in Render**. You must get the actual values and construct the URL manually.
 
-If your Railway `DATABASE_URL` doesn't include SSL parameters, add them manually:
-- Original: `mysql://root:password@host:port/database`
-- With SSL: `mysql://root:password@host:port/database?ssl={"rejectUnauthorized":false}`
+**See detailed guide**: [RAILWAY_TO_RENDER_SETUP.md](./RAILWAY_TO_RENDER_SETUP.md)
+
+### Quick Steps:
+
+1. **Get actual values from Railway Variables tab:**
+   - `MYSQLUSER` or `MYSQLUSERNAME` (usually `root`)
+   - `MYSQL_ROOT_PASSWORD` (your actual password)
+   - `RAILWAY_TCP_PROXY_DOMAIN` (hostname)
+   - `RAILWAY_TCP_PROXY_PORT` (port, usually `3306`)
+   - `MYSQL_DATABASE` (database name)
+
+2. **Construct the DATABASE_URL:**
+   ```
+   mysql://username:password@hostname:port/database?ssl={"rejectUnauthorized":false}
+   ```
+
+3. **URL-encode special characters in password** (if any):
+   - `@` → `%40`, `:` → `%3A`, `/` → `%2F`, etc.
+
+4. **Example:**
+   ```
+   mysql://root:MyP%40ssw0rd@containers-us-west-123.railway.app:3306/railway?ssl={"rejectUnauthorized":false}
+   ```
 
 ## Step 2: Deploy Backend to Render
 
@@ -135,6 +151,24 @@ cd backend && npm install && npm run build && npx prisma migrate deploy
 
 - **Error**: "SSL connection required"
   - **Solution**: Ensure `DATABASE_URL` includes `?ssl={"rejectUnauthorized":false}`
+
+- **Error**: "invalid port number in database URL"
+  - **Solution**: This error occurs when the port in your `DATABASE_URL` is missing, invalid, or contains non-numeric characters
+  - **Check your DATABASE_URL format**: `mysql://user:password@host:port/database`
+  - **Common issues**:
+    - Missing port: `mysql://user:pass@host/database` ❌ (should include `:3306` or your port)
+    - Invalid port: `mysql://user:pass@host:abc/database` ❌ (port must be a number)
+    - Port out of range: `mysql://user:pass@host:99999/database` ❌ (port must be 1-65535)
+  - **Correct format**: `mysql://user:password@host:3306/database` ✅
+  - **For Railway MySQL**: Copy the exact connection string from Railway's Variables tab
+  - **Special characters in password**: If your password contains special characters (like `@`, `:`, `/`, `#`, `?`), you must URL-encode them:
+    - `@` → `%40`
+    - `:` → `%3A`
+    - `/` → `%2F`
+    - `#` → `%23`
+    - `?` → `%3F`
+    - `&` → `%26`
+  - **Example**: If password is `p@ssw:rd`, use `mysql://user:p%40ssw%3Ard@host:3306/database`
 
 ### JWT Issues
 

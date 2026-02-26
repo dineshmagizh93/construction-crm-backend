@@ -13,26 +13,90 @@ export function getDatabaseConfig(configService: ConfigService) {
     );
   }
 
-  // Parse DATABASE_URL to check if SSL is needed
+  // Remove any surrounding quotes or whitespace
+  const cleanUrl = databaseUrl.trim().replace(/^["']|["']$/g, '');
+
+  // Validate and parse DATABASE_URL
   try {
-    const url = new URL(databaseUrl);
-    const isRailway = url.hostname.includes('railway.app') || url.hostname.includes('railway.internal');
+    const url = new URL(cleanUrl);
+    
+    // Validate protocol
+    if (!['mysql:', 'mysql2:'].includes(url.protocol)) {
+      throw new Error(
+        `Invalid database protocol: ${url.protocol}. Expected mysql:// or mysql2://`
+      );
+    }
+
+    // Validate hostname
+    if (!url.hostname || url.hostname.trim() === '') {
+      throw new Error('Database hostname is missing or invalid');
+    }
+
+    // Validate port
+    if (url.port) {
+      const portNum = parseInt(url.port, 10);
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        throw new Error(
+          `Invalid port number: "${url.port}". Port must be a number between 1 and 65535.`
+        );
+      }
+    }
+
+    // Validate database name (pathname)
+    if (!url.pathname || url.pathname === '/' || url.pathname.trim() === '') {
+      throw new Error(
+        'Database name is missing. URL format should be: mysql://user:password@host:port/database'
+      );
+    }
+
+    const isRailway = url.hostname.includes('railway.app') || 
+                      url.hostname.includes('railway.internal') || 
+                      url.hostname.includes('rlwy.net');
     const isProduction = configService.get<string>('NODE_ENV') === 'production';
 
     // For Railway MySQL, we need to add SSL parameters
     if (isRailway || isProduction) {
       // If DATABASE_URL doesn't already have SSL parameters, add them
-      if (!databaseUrl.includes('?ssl=') && !databaseUrl.includes('&ssl=')) {
-        const separator = databaseUrl.includes('?') ? '&' : '?';
-        return `${databaseUrl}${separator}ssl={"rejectUnauthorized":false}`;
+      if (!cleanUrl.includes('?ssl=') && !cleanUrl.includes('&ssl=')) {
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        const urlWithSsl = `${cleanUrl}${separator}ssl={"rejectUnauthorized":false}`;
+        
+        // Validate the final URL before returning
+        try {
+          new URL(urlWithSsl);
+          return urlWithSsl;
+        } catch (sslError) {
+          throw new Error(
+            `Failed to construct SSL-enabled database URL: ${sslError.message}. ` +
+            `Original URL: ${cleanUrl.substring(0, 50)}...`
+          );
+        }
       }
     }
 
-    return databaseUrl;
+    return cleanUrl;
   } catch (error) {
-    // If URL parsing fails, return original (might be a connection string format)
-    console.warn('Could not parse DATABASE_URL, using as-is:', error.message);
-    return databaseUrl;
+    // Provide helpful error message
+    if (error instanceof TypeError && error.message.includes('Invalid URL')) {
+      throw new Error(
+        `Invalid DATABASE_URL format: ${error.message}. ` +
+        `Expected format: mysql://user:password@host:port/database. ` +
+        `Make sure special characters in password are URL-encoded. ` +
+        `Current value (first 50 chars): ${cleanUrl.substring(0, 50)}...`
+      );
+    }
+    
+    // Re-throw our custom errors
+    if (error.message.includes('Invalid') || error.message.includes('missing')) {
+      throw error;
+    }
+    
+    // For other errors, provide context
+    throw new Error(
+      `Database URL validation failed: ${error.message}. ` +
+      `Please check your DATABASE_URL environment variable. ` +
+      `Format should be: mysql://user:password@host:port/database`
+    );
   }
 }
 
